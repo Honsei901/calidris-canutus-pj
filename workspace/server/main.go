@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"grpc/pb"
@@ -17,16 +18,19 @@ type server struct {
 	pb.UnimplementedFileServiceServer
 }
 
-func (*server) Donwload(req *pb.DownloadRequest, stream pb.FileService_DownloadServer) error {
+func (*server) Download(req *pb.DownloadRequest, stream pb.FileService_DownloadServer) error {
 	fmt.Println("Download was invoked")
 
 	filename := req.GetFilename()
-	path := "D:/code-study/repository/github/for-public/training/web/calidris-canutus-pj/workspace/storage" + filename
+	fmt.Println("PL")
+
+	path := "D:/code-study/repository/github/for-public/training/web/calidris-canutus-pj/workspace/storage/" + filename
 
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
+
 	defer file.Close()
 
 	buf := make([]byte, 5)
@@ -72,6 +76,30 @@ func (*server) ListFiles(ctx context.Context, req *pb.ListFilesRequest) (*pb.Lis
 		Filenames: filenames,
 	}
 	return res, nil
+}
+
+func (*server) Upload(stream pb.FileService_UploadServer) error {
+	fmt.Println("Upload was invoked")
+
+	var buf bytes.Buffer
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			res := &pb.UploadResponse{
+				Size: int32(buf.Len()),
+			}
+			return stream.SendAndClose(res)
+		}
+
+		if err != nil {
+			return err
+		}
+
+		data := req.GetData()
+		log.Printf("Received data(bytes): %v", string(data))
+
+		buf.Write(data)
+	}
 }
 
 func main() {
