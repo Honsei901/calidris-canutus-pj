@@ -18,6 +18,21 @@ type server struct {
 	pb.UnimplementedFileServiceServer
 }
 
+func main() {
+	lis, err := net.Listen("tcp", "localhost:50051")
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	s := grpc.NewServer()
+	pb.RegisterFileServiceServer(s, &server{})
+
+	fmt.Println("Server is running...")
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("Failed to server: %v", err)
+	}
+}
+
 func (*server) Download(req *pb.DownloadRequest, stream pb.FileService_DownloadServer) error {
 	fmt.Println("Download was invoked")
 
@@ -102,17 +117,30 @@ func (*server) Upload(stream pb.FileService_UploadServer) error {
 	}
 }
 
-func main() {
-	lis, err := net.Listen("tcp", "localhost:50051")
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
+func (*server) UploadAndNotifyProgress(stream pb.FileService_UploadAndNotifyProgressServer) error {
+	fmt.Println("UploadAndNotifyProgress was invoked")
 
-	s := grpc.NewServer()
-	pb.RegisterFileServiceServer(s, &server{})
+	size := 0
 
-	fmt.Println("Server is running...")
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to server: %v", err)
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		data := req.GetData()
+		log.Printf("Received data: %v", data)
+		size += len(data)
+
+		res := &pb.UploadAndNotifyProgressResponse{
+			Msg: fmt.Sprintf("Received %vbytes", size),
+		}
+		if err = stream.Send(res); err != nil {
+			return err
+		}
 	}
 }
