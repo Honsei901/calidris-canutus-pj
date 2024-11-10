@@ -11,23 +11,30 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 func main() {
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	certFile := "/Path/to/hogehoge.pem"
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
 	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+		log.Fatalf("failed to load TLS credentials from %s: %v", certFile, err)
+	}
+
+	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(creds))
+	if err != nil {
+		log.Fatalf("failed to connect: %v", err)
 	}
 	defer conn.Close()
 
 	client := pb.NewFileServiceClient(conn)
 
 	callDownload(client)
-	// callListFiles(client)
-	// callUpload(client)
-	// callUploadAndNotifyProgress(client)
+	callListFiles(client)
+	callUpload(client)
+	callUploadAndNotifyProgress(client)
 }
 
 func callListFiles(client pb.FileServiceClient) {
@@ -43,11 +50,14 @@ func callListFiles(client pb.FileServiceClient) {
 }
 
 func callDownload(client pb.FileServiceClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	req := &pb.DownloadRequest{
-		Filename: "languages.txt",
+		Filename: "language.txt",
 	}
 
-	stream, err := client.Download(context.Background(), req)
+	stream, err := client.Download(ctx, req)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -62,7 +72,9 @@ func callDownload(client pb.FileServiceClient) {
 			resErr, ok := status.FromError(err)
 			if ok {
 				if resErr.Code() == codes.NotFound {
-					log.Fatalf("Error Code: %v, Error Message: %v", resErr.Code(), resErr.Message())
+					log.Fatalf("error code: %v, error message: %v", resErr.Code(), resErr.Message())
+				} else if resErr.Code() == codes.DeadlineExceeded {
+					log.Fatalln("redline exceeded")
 				} else {
 					log.Fatalln("unknown grpc error")
 				}
@@ -118,7 +130,7 @@ func callUpload(client pb.FileServiceClient) {
 		log.Fatalln(err)
 	}
 
-	log.Printf("Received data size: %v", res.GetSize())
+	log.Printf("received data size: %v", res.GetSize())
 }
 
 func callUploadAndNotifyProgress(client pb.FileServiceClient) {
@@ -178,7 +190,7 @@ func callUploadAndNotifyProgress(client pb.FileServiceClient) {
 				log.Fatalln(err)
 			}
 
-			log.Printf("Received message: %v", res.GetMsg())
+			log.Printf("received message: %v", res.GetMsg())
 		}
 		close(ch)
 	}()

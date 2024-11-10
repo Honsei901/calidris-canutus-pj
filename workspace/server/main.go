@@ -15,6 +15,7 @@ import (
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 )
 
@@ -25,18 +26,28 @@ type server struct {
 func main() {
 	lis, err := net.Listen("tcp", "localhost:50051")
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		log.Fatalf("failed to listen: %v", err)
 	}
 
-	s := grpc.NewServer(grpc.UnaryInterceptor(
-		grpc_middleware.ChainUnaryServer(
-			myLogging(),
-			grpc_auth.UnaryServerInterceptor(authorize))))
+	creds, err := credentials.NewServerTLSFromFile(
+		"ssl/localhost.pem",     // For sampl
+		"ssl/localhost-key.pem", // For sampl
+	)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	s := grpc.NewServer(
+		grpc.Creds(creds),
+		grpc.UnaryInterceptor(
+			grpc_middleware.ChainUnaryServer(
+				myLogging(),
+				grpc_auth.UnaryServerInterceptor(authorize))))
 	pb.RegisterFileServiceServer(s, &server{})
 
-	fmt.Println("Server is running...")
+	fmt.Println("server is running...")
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to server: %v", err)
+		log.Fatalf("failed to server: %v", err)
 	}
 }
 
@@ -55,7 +66,7 @@ func authorize(ctx context.Context) (context.Context, error) {
 
 func myLogging() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-		log.Printf("Request data: %+v", req)
+		log.Printf("request data: %+v", req)
 
 		resp, err = handler(ctx, req)
 		if err != nil {
@@ -68,10 +79,10 @@ func myLogging() grpc.UnaryServerInterceptor {
 }
 
 func (*server) Download(req *pb.DownloadRequest, stream pb.FileService_DownloadServer) error {
-	fmt.Println("Download was invoked")
+	fmt.Println("download was invoked")
 
 	filename := req.GetFilename()
-	fmt.Println("PL")
+	fmt.Println("pl")
 
 	path := "D:/code-study/repository/github/for-public/training/web/calidris-canutus-pj/workspace/storage/" + filename
 
