@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func main() {
@@ -22,10 +24,10 @@ func main() {
 
 	client := pb.NewFileServiceClient(conn)
 
-	callListFiles(client)
 	callDownload(client)
-	callUpload(client)
-	callUploadAndNotifyProgress(client)
+	// callListFiles(client)
+	// callUpload(client)
+	// callUploadAndNotifyProgress(client)
 }
 
 func callListFiles(client pb.FileServiceClient) {
@@ -42,7 +44,7 @@ func callListFiles(client pb.FileServiceClient) {
 
 func callDownload(client pb.FileServiceClient) {
 	req := &pb.DownloadRequest{
-		Filename: "language.txt",
+		Filename: "languages.txt",
 	}
 
 	stream, err := client.Download(context.Background(), req)
@@ -57,7 +59,16 @@ func callDownload(client pb.FileServiceClient) {
 		}
 
 		if err != nil {
-			log.Fatalln(err)
+			resErr, ok := status.FromError(err)
+			if ok {
+				if resErr.Code() == codes.NotFound {
+					log.Fatalf("Error Code: %v, Error Message: %v", resErr.Code(), resErr.Message())
+				} else {
+					log.Fatalln("unknown grpc error")
+				}
+			} else {
+				log.Fatalln(err)
+			}
 		}
 
 		log.Println(string(res.GetData()))
