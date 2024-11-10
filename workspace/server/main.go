@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"grpc/pb"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"time"
 
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
 	"google.golang.org/grpc"
 )
 
@@ -24,12 +27,42 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.UnaryInterceptor(
+		grpc_middleware.ChainUnaryServer(
+			myLogging(),
+			grpc_auth.UnaryServerInterceptor(authorize))))
 	pb.RegisterFileServiceServer(s, &server{})
 
 	fmt.Println("Server is running...")
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to server: %v", err)
+	}
+}
+
+func authorize(ctx context.Context) (context.Context, error) {
+	token, err := grpc_auth.AuthFromMD(ctx, "Bearer")
+	if err != nil {
+		return nil, err
+	}
+
+	if token != "test-token" {
+		return nil, errors.New("bad token")
+	}
+
+	return ctx, nil
+}
+
+func myLogging() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		log.Printf("Request data: %+v", req)
+
+		resp, err = handler(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("response data: %+v", resp)
+
+		return resp, nil
 	}
 }
 
